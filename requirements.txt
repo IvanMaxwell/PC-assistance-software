@@ -1,0 +1,6 @@
+llama-cpp-python>=0.2.20
+psutil>=5.9.0
+pywin32>=306
+python-dotenv>=1.0.0
+requests>=2.31.0
+sentence-transformers>=2.2.2
