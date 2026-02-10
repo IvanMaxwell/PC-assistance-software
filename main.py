@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from core.orchestrator import Orchestrator
 from core.logger import logger
 from core.config import config
+from core.display import display
 from tools.registry import registry
 
 # Import diagnostic tools to register them
@@ -29,38 +30,45 @@ def main():
                         help="Path to GGUF model file")
     parser.add_argument("--dry-run", action="store_true",
                         help="Show plan without executing")
+    parser.add_argument("--verbose", "-v", action="store_true",
+                        help="Show verbose output")
     args = parser.parse_args()
     
     user_request = " ".join(args.request)
     model_path = args.model or config.local_model_path
     
-    logger.info("=" * 60)
-    logger.info("PC Automation Framework Starting...")
-    logger.info("=" * 60)
+    # Show header
+    display.header()
     
-    # Show registered tools
+    # Show registered tools (compact)
     tools = registry.list_tools()
-    logger.info(f"Registered {len(tools)} tools:")
-    for tool in tools:
-        logger.info(f"  - {tool['name']} ({tool['risk']})")
+    if args.verbose:
+        display.show_tools(tools)
+    else:
+        display.console.print(f"[dim]Loaded {len(tools)} tools[/dim]")
     
-    logger.info(f"Model: {model_path}")
-    logger.info(f"Request: {user_request}")
-    logger.info("=" * 60)
+    # Show user request
+    display.show_request(user_request)
+    display.divider()
     
-    # Create orchestrator
-    orchestrator = Orchestrator(model_path=model_path)
+    # Create orchestrator with display
+    orchestrator = Orchestrator(model_path=model_path, display=display)
     
     try:
         # Run orchestrator
         results = orchestrator.run(user_request)
         
-        logger.info("=" * 60)
-        logger.info("Execution Complete")
-        logger.info(f"Results: {results}")
-        logger.info("=" * 60)
+        display.divider()
+        display.show_results(results)
         
         return results
+    except KeyboardInterrupt:
+        display.show_error("Interrupted by user")
+    except Exception as e:
+        display.show_error(str(e))
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
     finally:
         # Cleanup (unload model)
         orchestrator.cleanup()

@@ -2,7 +2,7 @@
 PC Automation Framework - Tool Registry & Executor
 """
 from typing import Dict, Callable, Any, List
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from core.logger import logger
 
@@ -22,6 +22,8 @@ class ToolDefinition:
     risk_level: ToolRisk
     func: Callable
     required_params: List[str]
+    semantic_aliases: List[str] = field(default_factory=list)
+    sample_queries: List[str] = field(default_factory=list)
 
 
 class ToolRegistry:
@@ -38,7 +40,9 @@ class ToolRegistry:
         name: str,
         description: str,
         risk_level: ToolRisk,
-        required_params: List[str] = None
+        required_params: List[str] = None,
+        semantic_aliases: List[str] = None,
+        sample_queries: List[str] = None
     ):
         """Decorator to register a tool function."""
         def decorator(func: Callable):
@@ -47,7 +51,9 @@ class ToolRegistry:
                 description=description,
                 risk_level=risk_level,
                 func=func,
-                required_params=required_params or []
+                required_params=required_params or [],
+                semantic_aliases=semantic_aliases or [],
+                sample_queries=sample_queries or []
             )
             logger.debug(f"Registered tool: {name} (Risk: {risk_level.value})")
             return func
@@ -66,7 +72,9 @@ class ToolRegistry:
                 "name": t.name,
                 "description": t.description,
                 "risk": t.risk_level.value,
-                "params": t.required_params
+                "params": t.required_params,
+                "aliases": t.semantic_aliases,
+                "samples": t.sample_queries
             }
             for t in self._tools.values()
         ]

@@ -17,7 +17,7 @@ class SemanticRouter:
     Bypasses the Planner LLM for simple, low-risk requests.
     """
     
-    def __init__(self, model_name: str = "all-MiniLM-L12-v2", threshold: float = 0.70):
+    def __init__(self, model_name: str = "all-MiniLM-L12-v2", threshold: float = 0.47):
         self.threshold = threshold
         self.model = None
         self.model_name = model_name
@@ -50,9 +50,12 @@ class SemanticRouter:
         descriptions = []
         
         for tool in tools:
-            # Only route to SAFE tools automatically
+            # Only shortcut SAFE tools that have NO required parameters
             if tool["risk"] != ToolRisk.SAFE.value:
                 continue
+                
+            if len(tool.get("params", [])) > 0:
+                continue # Cannot shortcut tools that need arguments we can't extract
                 
             # Create a rich description for embedding
             # Format: "tool_name: tool_description"

@@ -115,6 +115,70 @@ OUTPUT FORMAT:
         logger.info(f"Generated plan with {len(result.get('steps', []))} steps")
         return result
     
+    def generate_summary(
+        self,
+        goal: str,
+        plan: Dict[str, Any],
+        results: list
+    ) -> str:
+        """
+        Generate a natural language summary of the execution.
+        
+        Args:
+            goal: The original user request.
+            plan: The executed plan.
+            results: The results from each step.
+        
+        Returns:
+            A human-readable summary string.
+        """
+        self._ensure_loaded()
+        
+        # Build context for the summarizer
+        steps_summary = []
+        for r in results:
+            step_id = r.get("step_id", "?")
+            status = r.get("status", "unknown")
+            tool = "unknown"
+            # Find tool name from plan
+            for step in plan.get("steps", []):
+                if step.get("step_id") == step_id:
+                    tool = step.get("tool_name", "unknown")
+                    break
+            
+            if status == "success":
+                result_data = r.get("result", {})
+                steps_summary.append(f"- Step {step_id} ({tool}): SUCCESS. Result: {json.dumps(result_data, default=str)[:200]}")
+            else:
+                error = r.get("error", "Unknown error")
+                steps_summary.append(f"- Step {step_id} ({tool}): FAILED. Error: {error}")
+        
+        steps_text = "\n".join(steps_summary) if steps_summary else "No steps executed."
+        
+        user_content = f"""User Request: {goal}
+
+Execution Results:
+{steps_text}
+
+Based on the above, provide a concise, helpful summary for the user. If they asked a question, answer it. If they requested an action, confirm what was done. Be friendly and direct."""
+        
+        system_prompt = """You are a helpful PC automation assistant. Summarize the execution results for the user in 1-3 sentences. Be concise and informative. Do not use markdown formatting."""
+        
+        prompt = format_chat_prompt(system_prompt, user_content)
+        
+        logger.info("Generating summary from LLM...")
+        
+        try:
+            summary = self._llm.generate(prompt, max_tokens=256, temperature=0.5)
+            # Clean up the summary
+            summary = summary.strip()
+            if not summary:
+                summary = "Execution completed."
+            return summary
+        except Exception as e:
+            logger.error(f"Failed to generate summary: {e}")
+            return "Execution completed. Unable to generate detailed summary."
+    
     def validate_plan_schema(self, plan: Dict[str, Any]) -> bool:
         """Validate plan against expected schema."""
         required = ["reasoning", "steps"]

@@ -13,7 +13,19 @@ from core.logger import logger
     name="net.access_ext",
     description="Ask External AI for information (Internet access)",
     risk_level=ToolRisk.MEDIUM,
-    required_params=["query"]
+    required_params=["query"],
+    semantic_aliases=[
+        "Search online knowledge",
+        "Ask external AI",
+        "Query internet data",
+        "Get help from web"
+    ],
+    sample_queries=[
+        "Ask the AI how to fix error code 0x80070005.",
+        "Look up the latest Nvidia driver version.",
+        "What does this specific Windows event ID mean?",
+        "Find a solution for my network issue online."
+    ]
 )
 def access_external_knowledge(query: str) -> Dict[str, Any]:
     """
@@ -36,7 +48,19 @@ def access_external_knowledge(query: str) -> Dict[str, Any]:
     name="net.download_ext",
     description="Generate a script to download/install files (Requires Review)",
     risk_level=ToolRisk.HIGH,
-    required_params=["goal", "url"]
+    required_params=["goal", "url"],
+    semantic_aliases=[
+        "Create download script",
+        "Generate installer code",
+        "Prepare file download",
+        "Automate software fetch"
+    ],
+    sample_queries=[
+        "Write a script to download VLC player.",
+        "Generate code to fetch the dataset from this URL.",
+        "Create a Python downloader for the latest VS Code installer.",
+        "I need a script to save this PDF to my temp folder."
+    ]
 )
 def generate_download_script(goal: str, url: str) -> Dict[str, Any]:
     """

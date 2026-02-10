@@ -18,6 +18,7 @@ class ExecutionContext:
     current_step_index: int = 0
     results: list = field(default_factory=list)
     error: Optional[str] = None
+    summary: str = ""
 
 
 class Orchestrator:
@@ -26,7 +27,7 @@ class Orchestrator:
     LLMs are called as external services; execution is deterministic.
     """
     
-    def __init__(self, model_path: str = None):
+    def __init__(self, model_path: str = None, display=None):
         self.state = State.IDLE
         self.context = ExecutionContext()
         self._handlers: Dict[State, Callable] = {}
@@ -34,6 +35,7 @@ class Orchestrator:
         self._planner = None
         self._executor = None
         self._memory = None
+        self._display = display
         self._register_default_handlers()
     
     def _register_default_handlers(self):
@@ -46,6 +48,7 @@ class Orchestrator:
             State.SCORING: self._handle_scoring,
             State.VALIDATING: self._handle_validating,
             State.EXECUTING: self._handle_executing,
+            State.REPORTING: self._handle_reporting,
             State.LEARNING: self._handle_learning,
             State.ERROR_RECOVERY: self._handle_error,
         }
@@ -66,6 +69,8 @@ class Orchestrator:
     
     def transition(self, new_state: State):
         """Transition to a new state."""
+        if self._display:
+            self._display.show_state_transition(self.state.value, new_state.value)
         logger.info(f"Transition: {self.state.value} -> {new_state.value}")
         self.state = new_state
     
@@ -119,6 +124,13 @@ class Orchestrator:
                 if fast_plan:
                     self.context.current_plan = fast_plan
                     # Skip Diagnosing/Planning/Scoring -> Go straight to Execution
+                    if self._display:
+                        self._display.show_router_result(
+                            self.context.user_request,
+                            fast_plan['steps'][0]['tool_name'],
+                            fast_plan.get('confidence_prediction', 0),
+                            hit=True
+                        )
                     logger.info("🚀 Semantic Router Shortcut Activated!")
                     self.transition(State.EXECUTING)
                     return
@@ -176,6 +188,8 @@ class Orchestrator:
             return
         
         self.context.current_plan = plan
+        if self._display:
+            self._display.show_plan(plan)
         logger.info(f"Plan generated: {plan.get('reasoning', 'No reasoning')[:100]}...")
         self.transition(State.SCORING)
     
@@ -201,6 +215,8 @@ class Orchestrator:
         score = (score + llm_confidence) / 2
         
         self.context.confidence_score = max(0.0, min(1.0, score))
+        if self._display:
+            self._display.show_confidence(self.context.confidence_score)
         logger.info(f"Confidence score: {self.context.confidence_score:.2f}")
         
         if self.context.confidence_score >= CONFIDENCE_THRESHOLD:
@@ -223,10 +239,38 @@ class Orchestrator:
         results = self._executor.execute_plan(self.context.current_plan)
         self.context.results = results
         
+        # Display step results
+        if self._display:
+            for r in results:
+                self._display.show_step_result(
+                    step_id=r.get('step_id', 0),
+                    tool=r.get('tool', 'unknown'),
+                    status=r.get('status', 'unknown'),
+                    result=r.get('result'),
+                    error=r.get('error')
+                )
+        
         # Check for failures
         failures = [r for r in results if r.get("status") == "failed"]
         if failures:
             logger.warning(f"Execution had {len(failures)} failures")
+        
+        self.transition(State.REPORTING)
+    
+    def _handle_reporting(self):
+        """Generate and display a summary of the execution."""
+        logger.info("Reporting: Generating summary...")
+        
+        summary = self._planner.generate_summary(
+            goal=self.context.user_request,
+            plan=self.context.current_plan,
+            results=self.context.results
+        )
+        
+        self.context.summary = summary
+        
+        if self._display:
+            self._display.show_final_summary(summary)
         
         self.transition(State.LEARNING)
     

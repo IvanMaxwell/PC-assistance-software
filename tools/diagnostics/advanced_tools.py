@@ -18,7 +18,20 @@ except ImportError:
     name="perf.cpu_mem_snapshot",
     description="Check system performance. Get CPU load, memory usage, and free disk space.",
     risk_level=ToolRisk.SAFE,
-    required_params=[]
+    required_params=[],
+    semantic_aliases=[
+        "Check system performance",
+        "Get CPU load",
+        "Get memory usage",
+        "Get disk space",
+        "analyse system performance"
+    ],
+    sample_queries=[
+      "Why is my computer running slow?",
+      "Check my current CPU and RAM usage",
+      "How much free disk space do I have on C drive?",
+      "Get a performance snapshot of the system"
+    ]
 )
 def get_performance_snapshot() -> Dict[str, Any]:
     """Get current system resource usage."""
@@ -47,7 +60,20 @@ def get_performance_snapshot() -> Dict[str, Any]:
     name="net.port_list",
     description="List all open network ports and listening services/processes.",
     risk_level=ToolRisk.SAFE,
-    required_params=[]
+    required_params=[],
+    semantic_aliases=[
+        "List open ports",
+        "Show listening ports",
+        "Get network ports",
+        "List network ports"
+    ],
+    sample_queries=[
+        "What ports are currently open on my system?",
+        "Show me all listening network ports.",
+        "Are there any unauthorized services listening on the network?",
+        "List all active TCP and UDP ports.",
+        "Is anything running on port 8080?"
+    ]
 )
 def list_open_ports(limit: int = 20) -> List[Dict[str, Any]]:
     """List open network ports."""
@@ -77,7 +103,19 @@ def list_open_ports(limit: int = 20) -> List[Dict[str, Any]]:
     name="eventlog.read",
     description="Read recent Windows Event Logs to find system errors or crashes.",
     risk_level=ToolRisk.SAFE,
-    required_params=[]  # log_type has a default ("System")
+    required_params=[] , # log_type has a default ("System")
+    semantic_aliases=[
+        "Read event logs",
+        "Check event logs",
+        "Get event logs",
+        "Read event logs"
+    ],
+    sample_queries=[
+        "Did the system crash recently? Check the logs.",
+        "Read the last 10 errors from the System event log.",
+        "Are there any warnings in the Application logs?",
+        "Show me recent Windows events"
+    ]
 )
 def read_event_log(log_type: str = "System", num_records: int = 10) -> List[Dict[str, Any]]:
     """
@@ -127,7 +165,19 @@ def read_event_log(log_type: str = "System", num_records: int = 10) -> List[Dict
     name="power.plan_query",
     description="Check current power plan (Balanced, High Performance, Power Saver).",
     risk_level=ToolRisk.SAFE,
-    required_params=[]
+    required_params=[],
+    semantic_aliases=[
+        "Check power plan",
+        "Get power plan",
+        "Read power plan",
+        "Check power plan"
+    ],
+    sample_queries=[
+        "What power plan is currently active?",
+        "Show me the current power settings.",
+        "Am I using Balanced or High Performance mode?",
+        "Check my power plan configuration."
+    ]
 )
 def query_power_plan() -> Dict[str, str]:
     """Query active power plan using powercfg."""

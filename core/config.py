@@ -15,6 +15,7 @@ class State(Enum):
     SCORING = "scoring"
     VALIDATING = "validating"
     EXECUTING = "executing"
+    REPORTING = "reporting"
     LEARNING = "learning"
     ERROR_RECOVERY = "error_recovery"
 
