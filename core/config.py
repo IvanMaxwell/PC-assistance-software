@@ -35,8 +35,11 @@ class APIConfig:
     
     # Local LLM (Planner/Validator) - Deepseek R1 Distill
     local_model_path: str = os.getenv(
-        "LOCAL_MODEL_PATH", 
-        r"C:\Users\Home\Desktop\pc-automation-demo\DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"
+        "DEEPSEEK_MODEL_PATH",
+        os.getenv(
+            "LOCAL_MODEL_PATH",
+            r"C:\Users\Home\Desktop\pc-automation-desktop\DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"
+        )
     )
     
     # Fast API (Analysis, Content)

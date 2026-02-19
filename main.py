@@ -1,5 +1,5 @@
 """
-PC Automation Framework - Entry Point
+PC Automation Framework - Entry Point (CLI)
 """
 import sys
 import os
@@ -8,17 +8,19 @@ import argparse
 # Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from core.orchestrator import Orchestrator
 from core.logger import logger
 from core.config import config
 from core.display import display
-from tools.registry import registry
+from tools import discover_tools
 
-# Import diagnostic tools to register them
-import tools.diagnostics.system_tools
-import tools.diagnostics.advanced_tools
-import tools.actions.active_tools
-import tools.actions.external_tools
+# Discover and register all tools
+discover_tools()
+
+from tools.registry import registry
 
 
 def main():

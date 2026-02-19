@@ -1,178 +1,165 @@
 """
-PC Automation Framework - Tool Registry & Executor
+Tool Registry - Central registration system for all automation tools.
+Uses decorator pattern: @registry.register(risk_level="SAFE", category="system")
 """
-from typing import Dict, Callable, Any, List
-from dataclasses import dataclass, field
+
+import inspect
+from typing import Optional, Callable, Dict, List, Any
+from functools import wraps
 from enum import Enum
-from core.logger import logger
 
 
-class ToolRisk(Enum):
-    """Risk levels for tools."""
-    SAFE = "safe"           # Read-only, no side effects
-    MEDIUM = "medium"       # Reversible changes
-    HIGH = "high"           # Destructive or system-altering
+class RiskLevel(Enum):
+    SAFE = "SAFE"       # Read-only, no side effects
+    MEDIUM = "MEDIUM"   # Reversible changes
+    HIGH = "HIGH"       # Potentially dangerous / irreversible
 
 
-@dataclass
-class ToolDefinition:
+class ToolMeta:
     """Metadata for a registered tool."""
-    name: str
-    description: str
-    risk_level: ToolRisk
-    func: Callable
-    required_params: List[str]
-    semantic_aliases: List[str] = field(default_factory=list)
-    sample_queries: List[str] = field(default_factory=list)
+    __slots__ = ("name", "func", "risk_level", "category", "description", "parameters")
+
+    def __init__(self, name: str, func: Callable, risk_level: str,
+                 category: str, description: str, parameters: List[Dict]):
+        self.name = name
+        self.func = func
+        self.risk_level = risk_level
+        self.category = category
+        self.description = description
+        self.parameters = parameters
 
 
 class ToolRegistry:
     """
-    Central registry for all available tools.
-    The Executor can ONLY call tools registered here.
+    Singleton registry for all automation tools.
+
+    Usage:
+        @registry.register(risk_level="SAFE", category="system")
+        def get_cpu_usage(process_name: Optional[str] = None) -> dict:
+            ...
     """
-    
+
     def __init__(self):
-        self._tools: Dict[str, ToolDefinition] = {}
-    
-    def register(
-        self,
-        name: str,
-        description: str,
-        risk_level: ToolRisk,
-        required_params: List[str] = None,
-        semantic_aliases: List[str] = None,
-        sample_queries: List[str] = None
-    ):
+        self._tools: Dict[str, ToolMeta] = {}
+
+    # ------------------------------------------------------------------
+    # Registration
+    # ------------------------------------------------------------------
+
+    def register(self, risk_level: str = "SAFE", category: str = "general"):
         """Decorator to register a tool function."""
-        def decorator(func: Callable):
-            self._tools[name] = ToolDefinition(
-                name=name,
-                description=description,
-                risk_level=risk_level,
+
+        def decorator(func: Callable) -> Callable:
+            tool_name = func.__name__
+            description = (func.__doc__ or "").strip().split("\n")[0]
+
+            # Extract parameter info from type hints
+            sig = inspect.signature(func)
+            parameters = []
+            for pname, param in sig.parameters.items():
+                ptype = "string"
+                if param.annotation != inspect.Parameter.empty:
+                    ptype = getattr(param.annotation, "__name__", str(param.annotation))
+                parameters.append({
+                    "name": pname,
+                    "type": ptype,
+                    "required": param.default is inspect.Parameter.empty,
+                    "default": None if param.default is inspect.Parameter.empty else param.default,
+                })
+
+            meta = ToolMeta(
+                name=tool_name,
                 func=func,
-                required_params=required_params or [],
-                semantic_aliases=semantic_aliases or [],
-                sample_queries=sample_queries or []
+                risk_level=risk_level,
+                category=category,
+                description=description,
+                parameters=parameters,
             )
-            logger.debug(f"Registered tool: {name} (Risk: {risk_level.value})")
-            return func
+            self._tools[tool_name] = meta
+
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            wrapper._tool_meta = meta
+            return wrapper
+
         return decorator
-    
-    def get(self, name: str) -> ToolDefinition:
-        """Get a tool by name."""
-        if name not in self._tools:
-            raise KeyError(f"Tool '{name}' not found in registry")
-        return self._tools[name]
-    
-    def list_tools(self) -> List[Dict[str, Any]]:
-        """List all tools for LLM context."""
+
+    # ------------------------------------------------------------------
+    # Lookup helpers
+    # ------------------------------------------------------------------
+
+    def get(self, name: str) -> Optional[ToolMeta]:
+        return self._tools.get(name)
+
+    def get_all(self) -> Dict[str, ToolMeta]:
+        return dict(self._tools)
+
+    def get_by_category(self, category: str) -> List[ToolMeta]:
+        return [t for t in self._tools.values() if t.category == category]
+
+    def get_by_risk(self, risk_level: str) -> List[ToolMeta]:
+        return [t for t in self._tools.values() if t.risk_level == risk_level]
+
+    def list_names(self) -> List[str]:
+        return list(self._tools.keys())
+
+    def list_tools(self) -> List[Dict]:
+        """Return tools as simple dicts (used by display, router, main)."""
+        out = []
+        for t in self._tools.values():
+            risk = t.risk_level
+            if hasattr(risk, "value"):
+                risk = risk.value
+            out.append({
+                "name": t.name,
+                "description": t.description,
+                "risk": risk.lower() if isinstance(risk, str) else str(risk),
+                "category": t.category,
+                "params": [p for p in t.parameters if p.get("required")],
+            })
+        return out
+
+    # ------------------------------------------------------------------
+    # Execution
+    # ------------------------------------------------------------------
+
+    async def execute(self, name: str, params: Optional[Dict[str, Any]] = None) -> Dict:
+        """Execute a tool by name with the given parameters (handles both sync and async)."""
+        meta = self._tools.get(name)
+        if not meta:
+            return {"status": "error", "message": f"Tool '{name}' not found"}
+
+        try:
+            import asyncio
+            if asyncio.iscoroutinefunction(meta.func):
+                result = await meta.func(**(params or {}))
+            else:
+                # Run sync functions in a thread to avoid blocking the event loop
+                result = await asyncio.to_thread(meta.func, **(params or {}))
+            return result
+        except TypeError as e:
+            return {"status": "error", "message": f"Invalid parameters: {e}"}
+        except Exception as e:
+            return {"status": "error", "message": f"Execution failed: {e}"}
+
+    # ------------------------------------------------------------------
+    # Serialisation (for API / Planner)
+    # ------------------------------------------------------------------
+
+    def to_dict_list(self) -> List[Dict]:
+        """Return all tools as serialisable dicts (for API responses)."""
         return [
             {
                 "name": t.name,
+                "risk_level": t.risk_level,
+                "category": t.category,
                 "description": t.description,
-                "risk": t.risk_level.value,
-                "params": t.required_params,
-                "aliases": t.semantic_aliases,
-                "samples": t.sample_queries
+                "parameters": t.parameters,
             }
             for t in self._tools.values()
         ]
-    
-    def get_safe_tools_only(self) -> List[str]:
-        """Get names of safe (read-only) tools."""
-        return [t.name for t in self._tools.values() if t.risk_level == ToolRisk.SAFE]
 
 
-# Global registry instance
+# Module-level singleton
 registry = ToolRegistry()
-
-
-class Executor:
-    """
-    Deterministic executor that runs plans step by step.
-    NO LLM involvement - just dispatching to registered tools.
-    """
-    
-    def __init__(self, tool_registry: ToolRegistry):
-        self.registry = tool_registry
-    
-    def execute_plan(
-        self,
-        plan: Dict[str, Any],
-        confirm_callback: Callable[[int, str, str, Dict], bool] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Execute a validated plan.
-        Halts on first failure.
-        
-        Args:
-            plan: The JSON plan to execute.
-            confirm_callback: Optional function(step_id, tool_name, risk, args) -> bool.
-                              Returns True if execution should proceed.
-        """
-        results = []
-        steps = plan.get("steps", [])
-        
-        for step in steps:
-            step_id = step.get("step_id", "?")
-            tool_name = step.get("tool_name")
-            args = step.get("arguments", {})
-            on_failure = step.get("on_failure", "abort")
-            
-            logger.info(f"Executing step {step_id}: {tool_name}")
-            
-            try:
-                # Get tool from registry (security check)
-                tool_def = self.registry.get(tool_name)
-                
-                # Check permission if callback provided
-                if confirm_callback:
-                    allowed = confirm_callback(
-                        step_id,
-                        tool_name,
-                        tool_def.risk_level.value,
-                        args
-                    )
-                    if not allowed:
-                        logger.warning(f"Step {step_id} denied by user")
-                        results.append({
-                            "step_id": step_id,
-                            "status": "skipped",
-                            "error": "User denied permission"
-                        })
-                        if on_failure == "abort":
-                            break
-                        continue
-                
-                # Validate required params
-                
-                # Validate required params
-                for param in tool_def.required_params:
-                    if param not in args:
-                        raise ValueError(f"Missing required param: {param}")
-                
-                # Execute tool
-                result = tool_def.func(**args)
-                results.append({
-                    "step_id": step_id,
-                    "status": "success",
-                    "result": result
-                })
-                logger.info(f"Step {step_id} completed successfully")
-                
-            except Exception as e:
-                error_msg = str(e)
-                logger.error(f"Step {step_id} failed: {error_msg}")
-                results.append({
-                    "step_id": step_id,
-                    "status": "failed",
-                    "error": error_msg
-                })
-                
-                if on_failure == "abort":
-                    logger.warning("Aborting execution due to step failure")
-                    break
-                # else: continue to next step
-        
-        return results

@@ -5,7 +5,8 @@ Uses Sentence Transformers to shortcut simple queries directly to tools.
 from typing import Dict, Any, List, Optional
 import numpy as np
 from core.logger import logger
-from tools.registry import registry, ToolRisk
+from tools.registry import registry
+
 
 # Global router instance
 _router_instance = None
@@ -51,14 +52,12 @@ class SemanticRouter:
         
         for tool in tools:
             # Only shortcut SAFE tools that have NO required parameters
-            if tool["risk"] != ToolRisk.SAFE.value:
+            if tool["risk"] != "safe":
                 continue
                 
             if len(tool.get("params", [])) > 0:
-                continue # Cannot shortcut tools that need arguments we can't extract
+                continue
                 
-            # Create a rich description for embedding
-            # Format: "tool_name: tool_description"
             desc = f"{tool['name']}: {tool['description']}"
             descriptions.append(desc)
             self.tool_map[len(descriptions)-1] = tool["name"]
@@ -75,14 +74,8 @@ class SemanticRouter:
         if not self.model or len(self.tool_embeddings) == 0:
             return None
             
-        # Embed query
         query_embedding = self.model.encode([query])
         
-        # Calculate cosine similarity
-        # (embeddings are normalized by default in sentence_transformers?)
-        # Let's assume standard cosine sim: (A . B) / (|A| |B|)
-        
-        # sentence-transformers util.cos_sim is better but let's stick to numpy for less deps import
         from sentence_transformers import util
         hits = util.semantic_search(query_embedding, self.tool_embeddings, top_k=1)
         
@@ -105,13 +98,31 @@ class SemanticRouter:
                     {
                         "step_id": 1,
                         "tool_name": tool_name,
-                        "arguments": {}, # Simple tools usually have no args or inferred args - Limitation!
+                        "arguments": {},
                         "on_failure": "abort"
                     }
                 ]
             }
         
         return None
+
+
+    def get_similarity_scores(self, query: str, top_k: int = 5) -> List[Dict]:
+        """Return top-k tool similarity scores for a query (for UI display)."""
+        if not self.model or len(self.tool_embeddings) == 0:
+            return []
+        query_embedding = self.model.encode([query])
+        from sentence_transformers import util
+        hits = util.semantic_search(query_embedding, self.tool_embeddings, top_k=top_k)
+        results = []
+        if hits and hits[0]:
+            for hit in hits[0]:
+                idx = hit['corpus_id']
+                results.append({
+                    "tool": self.tool_map.get(idx, "?"),
+                    "score": round(hit['score'], 3),
+                })
+        return results
 
 
 def get_router() -> Optional[SemanticRouter]:

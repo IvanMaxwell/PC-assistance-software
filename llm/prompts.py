@@ -72,7 +72,7 @@ OUTPUT:
 
 def build_planner_prompt(goal: str, diagnostics: dict, tools: list, memory_context: dict) -> str:
     """Build the full prompt for the Planner LLM."""
-    tools_str = "\n".join([f"- {t['name']}: {t['description']} (risk: {t['risk']})" for t in tools])
+    tools_str = "\n".join([f"- {t['name']}: {t['description']} (risk: {t.get('risk', t.get('risk_level', '?'))})" for t in tools])
     
     return f"""{PLANNER_SYSTEM_PROMPT}
 
