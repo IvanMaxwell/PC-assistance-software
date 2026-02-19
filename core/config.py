@@ -20,14 +20,23 @@ class State(Enum):
     ERROR_RECOVERY = "error_recovery"
 
 
+# --- Safety Configuration ---
+class SafetyMode(Enum):
+    SAFE = "safe"           # Ask for every action (default)
+    SEMI_AUTONOMOUS = "semi"  # Ask only for MEDIUM/HIGH risk
+    AUTONOMOUS = "autonomous" # Never ask (dangerous)
+
+
 # --- API Configuration ---
 @dataclass
 class APIConfig:
     """Holds API keys and endpoints."""
+    safety_mode: SafetyMode = SafetyMode.SAFE
+    
     # Local LLM (Planner/Validator) - Deepseek R1 Distill
     local_model_path: str = os.getenv(
         "LOCAL_MODEL_PATH", 
-        r"C:\Users\Home\Desktop\final year project\documents\Orchestration-O1\models\DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"
+        r"C:\Users\Home\Desktop\pc-automation-demo\DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"
     )
     
     # Fast API (Analysis, Content)

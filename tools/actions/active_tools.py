@@ -381,3 +381,67 @@ def run_disk_cleanup() -> Dict[str, Any]:
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
+@registry.register(
+    name="fs.move_file",
+    description="Move a file from source to destination",
+    risk_level=ToolRisk.MEDIUM,
+    required_params=["source", "destination"],
+    semantic_aliases=[
+        "Move file",
+        "Rename file",
+        "Transfer file",
+        "Organize file"
+    ],
+    sample_queries=[
+        r"Move C:\Downloads\report.pdf to C:\Documents\Reports",
+        r"Rename test.txt to final.txt",
+        "Put the image in the Pictures folder",
+        "Organize these logs into the archive folder"
+    ]
+)
+def move_file(source: str, destination: str) -> Dict[str, Any]:
+    """Move or rename a file."""
+    try:
+        import shutil
+        # Ensure dir exists? No, let's keep it simple or maybe smart.
+        # Ideally we should use another tool for mkdir, but commonly move might imply mkdir?
+        # Let's stick to strict tools.
+        
+        # Check if destination is a directory
+        if os.path.isdir(destination):
+            # Move into directory
+            shutil.move(source, destination)
+            return {"success": True, "message": f"Moved {source} to {destination}"}
+        else:
+            # Rename/Move to specific path
+            shutil.move(source, destination)
+            return {"success": True, "message": f"Moved/Renamed {source} to {destination}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@registry.register(
+    name="fs.create_dir",
+    description="Create a new directory (folder)",
+    risk_level=ToolRisk.SAFE,
+    required_params=["path"],
+    semantic_aliases=[
+        "Make directory",
+        "Create folder",
+        "New folder",
+        "Make new path"
+    ],
+    sample_queries=[
+        r"Create a new folder called 'PDFs' in Downloads",
+        r"Make a directory at C:\Temp\NewParams",
+        "Create the destination folder",
+        "Ensure the 'logs' directory exists"
+    ]
+)
+def create_directory(path: str) -> Dict[str, Any]:
+    """Create a new directory."""
+    try:
+        os.makedirs(path, exist_ok=True)
+        return {"success": True, "path": path, "message": "Directory created"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}

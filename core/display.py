@@ -170,6 +170,22 @@ class Display:
                     border_style="dim"
                 ))
     
+    def ask_permission(self, step_id: int, tool_name: str, risk: str, args: Dict) -> bool:
+        """Ask user for permission to execute a tool."""
+        
+        risk_color = "green" if risk == "safe" else "yellow" if risk == "medium" else "red"
+        
+        self.console.print(Panel(
+            f"Step {step_id}: [cyan]{tool_name}[/cyan]\n"
+            f"Risk: [{risk_color}]{risk.upper()}[/{risk_color}]\n"
+            f"Args: {json.dumps(args, indent=2)}",
+            title="⚠️  Permission Required",
+            border_style="yellow"
+        ))
+        
+        from rich.prompt import Confirm
+        return Confirm.ask("Allow this step?", default=False)
+
     def show_final_summary(self, summary: str):
         """Display the final AI-generated summary."""
         self.console.print(Panel(

@@ -25,7 +25,7 @@ class LocalLLM:
         self.n_ctx = n_ctx
         self.n_gpu_layers = n_gpu_layers
         self._model: Optional[Llama] = None
-        self._verbose = verbose
+        self._verbose = verbose 
     
     def load(self):
         """Load the model into memory."""
@@ -77,6 +77,15 @@ class LocalLLM:
             top_p=top_p,
             stop=stop_tokens
         )
+        
+        usage = response.get("usage") or {}
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", 0)
+        
+        msg = f"💰 Token Usage: Prompt: {prompt_tokens} + Completion: {completion_tokens} = {total_tokens} Total"
+        logger.info(msg)
+        print(msg)  # Force output to stdout for debugging
         
         text = response["choices"][0]["text"]
         logger.debug(f"Generated {len(text)} chars")

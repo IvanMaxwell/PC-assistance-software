@@ -97,10 +97,19 @@ class Executor:
     def __init__(self, tool_registry: ToolRegistry):
         self.registry = tool_registry
     
-    def execute_plan(self, plan: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def execute_plan(
+        self,
+        plan: Dict[str, Any],
+        confirm_callback: Callable[[int, str, str, Dict], bool] = None
+    ) -> List[Dict[str, Any]]:
         """
         Execute a validated plan.
         Halts on first failure.
+        
+        Args:
+            plan: The JSON plan to execute.
+            confirm_callback: Optional function(step_id, tool_name, risk, args) -> bool.
+                              Returns True if execution should proceed.
         """
         results = []
         steps = plan.get("steps", [])
@@ -116,6 +125,27 @@ class Executor:
             try:
                 # Get tool from registry (security check)
                 tool_def = self.registry.get(tool_name)
+                
+                # Check permission if callback provided
+                if confirm_callback:
+                    allowed = confirm_callback(
+                        step_id,
+                        tool_name,
+                        tool_def.risk_level.value,
+                        args
+                    )
+                    if not allowed:
+                        logger.warning(f"Step {step_id} denied by user")
+                        results.append({
+                            "step_id": step_id,
+                            "status": "skipped",
+                            "error": "User denied permission"
+                        })
+                        if on_failure == "abort":
+                            break
+                        continue
+                
+                # Validate required params
                 
                 # Validate required params
                 for param in tool_def.required_params:

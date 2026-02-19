@@ -4,7 +4,7 @@ PC Automation Framework - Orchestrator (FSM)
 from enum import Enum
 from typing import Optional, Dict, Any, Callable
 from dataclasses import dataclass, field
-from core.config import State, CONFIDENCE_THRESHOLD, config
+from core.config import State, CONFIDENCE_THRESHOLD, config, SafetyMode
 from core.logger import logger
 
 
@@ -236,7 +236,31 @@ class Orchestrator:
         """Execute plan steps deterministically via Tool Registry."""
         logger.info("Executing: Running plan steps...")
         
-        results = self._executor.execute_plan(self.context.current_plan)
+        def check_permission(step_id, tool_name, risk, args) -> bool:
+            """Callback for permission check."""
+            mode = config.safety_mode
+            
+            # Autonomous: never ask
+            if mode == SafetyMode.AUTONOMOUS:
+                return True
+                
+            # Semi-Autonomous: ask only for MEDIUM/HIGH
+            if mode == SafetyMode.SEMI_AUTONOMOUS and risk == "safe":
+                return True
+            
+            # Safe Mode (Default): Ask for everything
+            # Or if it's Semi/High risk
+            if self._display:
+                return self._display.ask_permission(step_id, tool_name, risk, args)
+            
+            # If no display but requires permission, assume denied for safety
+            logger.warning(f"Permission required for {tool_name} but no display attached.")
+            return False
+
+        results = self._executor.execute_plan(
+            self.context.current_plan,
+            confirm_callback=check_permission
+        )
         self.context.results = results
         
         # Display step results

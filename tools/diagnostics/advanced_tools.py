@@ -14,42 +14,76 @@ except ImportError:
 
 # --- Performance Diagnostics ---
 
+# --- Performance Diagnostics ---
+
 @registry.register(
-    name="perf.cpu_mem_snapshot",
-    description="Check system performance. Get CPU load, memory usage, and free disk space.",
+    name="system.get_snapshot",
+    description="Get system performance snapshot (CPU, Mem, Disk, Net) and Top 5 resource-consuming processes.",
     risk_level=ToolRisk.SAFE,
     required_params=[],
     semantic_aliases=[
         "Check system performance",
-        "Get CPU load",
-        "Get memory usage",
-        "Get disk space",
-        "analyse system performance"
+        "Open Task Manager",
+        "Monitor system resources",
+        "Why is my computer slow?",
+        "Get process snapshot"
     ],
     sample_queries=[
-      "Why is my computer running slow?",
-      "Check my current CPU and RAM usage",
-      "How much free disk space do I have on C drive?",
-      "Get a performance snapshot of the system"
+        "Show me a system performance snapshot.",
+        "What is using the most CPU right now?",
+        "Open Task Manager and show top processes.",
+        "Check current CPU, RAM, and Disk usage.",
+        "Who is hogging all the memory?"
     ]
 )
-def get_performance_snapshot() -> Dict[str, Any]:
-    """Get current system resource usage."""
-    cpu_percent = psutil.cpu_percent(interval=1)
+def get_system_snapshot() -> Dict[str, Any]:
+    """Get comprehensive system snapshot (Global + Top Processes)."""
+    # 1. Global Stats
+    cpu_percent = psutil.cpu_percent(interval=0.1)
     mem = psutil.virtual_memory()
     disk = psutil.disk_usage('/')
+    net_io = psutil.net_io_counters()
+    
+    # 2. Process Stats (Iterate once)
+    dataset = []
+    for p in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_info', 'status']):
+        try:
+            # cpu_percent might be 0 on first call if not cached, but we can't block too long
+            # using interval=None is non-blocking
+            p_cpu = p.info['cpu_percent'] 
+            p_mem = p.info['memory_info'].rss / (1024 * 1024) # MB
+            dataset.append({
+                "pid": p.info['pid'],
+                "name": p.info['name'],
+                "cpu": p_cpu,
+                "mem_mb": round(p_mem, 1),
+                "status": p.info['status']
+            })
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+            
+    # Sort
+    top_cpu = sorted(dataset, key=lambda x: x['cpu'], reverse=True)[:5]
+    top_mem = sorted(dataset, key=lambda x: x['mem_mb'], reverse=True)[:5]
     
     return {
-        "cpu_percent": cpu_percent,
-        "memory": {
-            "total_gb": round(mem.total / (1024**3), 2),
-            "available_gb": round(mem.available / (1024**3), 2),
-            "percent": mem.percent
+        "global": {
+            "cpu_total_percent": cpu_percent,
+            "memory": {
+                "total_gb": round(mem.total / (1024**3), 2),
+                "percent": mem.percent,
+                "available_gb": round(mem.available / (1024**3), 2)
+            },
+            "disk_c": {
+                 "free_gb": round(disk.free / (1024**3), 2),
+                 "percent": disk.percent
+            },
+            "boot_time_net_sent_mb": round(net_io.bytes_sent / (1024**2), 1),
+            "boot_time_net_recv_mb": round(net_io.bytes_recv / (1024**2), 1)
         },
-        "disk_c": {
-            "total_gb": round(disk.total / (1024**3), 2),
-            "free_gb": round(disk.free / (1024**3), 2),
-            "percent": disk.percent
+        "top_processes": {
+            "by_cpu": top_cpu,
+            "by_memory": top_mem
         }
     }
 
